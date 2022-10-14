@@ -379,41 +379,6 @@ PivotResult_t* pivot_tableau(Tableau_t* tableau) {
     return result;
 }
 
-struct TableauStore {
-    Tableau_t** store;
-    int size;
-    int capacity;
-};
-typedef struct TableauStore TableauStore_t;
-
-TableauStore_t* new_store() {
-    TableauStore_t* store = (TableauStore_t*) malloc(sizeof(TableauStore_t));
-    store->size = 0;
-    store->capacity = 10;
-    store->store = (Tableau_t**) calloc(store->capacity, sizeof(Tableau_t*));
-
-    return store;
-}
-
-void free_store(TableauStore_t* store) {
-    if (store != NULL) {
-        for (int index = 0; index < store->size; index++) {
-            if (store->store[index] != NULL) free_tableau(store->store[index]);
-        }
-        free(store->store);
-        free(store);
-    }
-}
-
-void add_tableau(TableauStore_t* store, Tableau_t* tableau) {
-    store->store[store->size++] = tableau;
-    if (store->size == store->capacity) {
-        store->capacity *= 2;
-        // TODO: not memory safe, add check here
-        realloc(store->store, store->capacity);
-    }
-}
-
 /**
  * Runs the simplex method on the supplied payoff matrix.
  *
@@ -435,21 +400,23 @@ int main(int argc, char** argv) {
             int* order = (int*) calloc(n, sizeof(int));
             memset(order, -1, n * sizeof(int));
             
-            // initialize tableau store
-            TableauStore_t* store = new_store();
-
             Tableau_t* tableau = get_init_tableau(payoff_result->payoff, m, n);
-            add_tableau(store, tableau);
-
             int pivot_count = 0;
             PivotResult_t* pivot_result = NULL;
             while (true) {
+                // print tableau
+                if (pivot_count == 0) printf("Initial Tableau:\n");
+                else printf("Tableau %d:\n", pivot_count);
+                print_tableau(tableau);
+                printf("\n");
+
+                // pivot it
                 pivot_result = pivot_tableau(tableau);
                 if (pivot_result->success) {
                     if (pivot_count < n) order[pivot_count] = pivot_result->pivot_row;
                     
+                    free_tableau(tableau);
                     tableau = pivot_result->tableau;
-                    add_tableau(store, tableau);
                     free(pivot_result); // dont free nested tableau
                 }
                 else {
@@ -461,31 +428,25 @@ int main(int argc, char** argv) {
             }
 
             // process the final tableau and determine strategies and value
-            // note: tableau is the final tableau, can use it directly w/o store
-            double v = tableau->m[tableau->rows - 1][tableau->cols - 1];
-            double value = (1 / v) - tableau->k;
+            // note: tableau is the final tableau
+            double v = tableau->m[tableau->rows - 1][tableau->cols - 1]; // V
+            double value = (1 / v) - tableau->k; // calculate value of the game
 
             double* p1_strategy = (double*) calloc(m, sizeof(double));
             double* p2_strategy = (double*) calloc(n, sizeof(double));
 
+            // calculate p1 strategy
             for (int index = 0; index < m; index++)
                 p1_strategy[index] = tableau->m[tableau->rows - 1][tableau->x_size + index] / v;
 
+            // calculate p2 strategy
             for (int index = 0; index < n; index++) {
                 int x_index = order[index];
                 p2_strategy[index] = (x_index >= 0)? tableau->m[x_index][tableau->cols - 1] / v : 0;
             }
 
             // print results
-            for (int index = 0; index < store->size; index++) {
-                if (index == 0) printf("Initial Tableau:\n");
-                else if (index == store->size - 1) printf("Final Tableau:\n");
-                else printf("Tableau %d:\n", index);
-
-                print_tableau(store->store[index]);
-                printf("\n");
-            }
-
+            // print player 1 strategy
             char separator[3] = "";
             printf("Player 1 Optimal Strategy: ( ");
             for (int index = 0; index < m; index++) {
@@ -494,6 +455,7 @@ int main(int argc, char** argv) {
             }
             printf(" )\n");
 
+            // print player 2 strategy
             strcpy(separator, "");
             printf("Player 2 Optimal Strategy: ( ");
             for (int index = 0; index < n; index++) {
@@ -502,11 +464,12 @@ int main(int argc, char** argv) {
             }
             printf(" )\n");
 
+            // print value
             printf("Value: %5.2f\n", value);
 
+            // free used memory
             free(p1_strategy);
             free(p2_strategy);
-            free_store(store);
             free(order);
         }
         else { // invalid payoff matrix
