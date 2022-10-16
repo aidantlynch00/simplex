@@ -408,11 +408,11 @@ int main(int argc, char** argv) {
                 if (pivot_count == 0) printf("Initial Tableau:\n");
                 else printf("Tableau %d:\n", pivot_count);
                 print_tableau(tableau);
-                printf("\n");
 
                 // pivot it
                 pivot_result = pivot_tableau(tableau);
                 if (pivot_result->success) {
+                    printf("Pivot: ( %d, %d )\n\n", pivot_result->pivot_row, pivot_result->pivot_col);
                     if (pivot_count < n) order[pivot_count] = pivot_result->pivot_row;
                     
                     free_tableau(tableau);
